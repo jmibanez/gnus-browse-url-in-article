@@ -98,15 +98,16 @@ Create instances with `gnus-browse-url-in-article-make-handler'.")
   :group 'gnus)
 
 (defcustom gnus-browse-url-in-article-handlers nil
-  "List of `gnus-browse-url-in-article-handler' instances for article URL browsing.
+  "List of handler instances for article URL browsing.
 
-Each handler is tried after `gnus-browse-url-in-article-default-handlers' and
-before the generic fallback.  The first handler for which
+Each handler is tried after `gnus-browse-url-in-article-default-handlers'
+and before the generic fallback.  The first handler for which
 `gnus-browse-url-in-article-handler-matches-p' returns non-nil and
 `gnus-browse-url-in-article-handler-get-urls' returns a non-nil alist wins.
 
-Use `gnus-browse-url-in-article-add-handler' to prepend entries, or
-`gnus-browse-url-in-article-make-handler' to construct one from a pair of functions."
+Use `gnus-browse-url-in-article-add-handler' to prepend entries,
+`gnus-browse-url-in-article-make-handler' to construct one from functions,
+or `register-gnus-browse-in-article-handler' to do both in one form."
   :type '(repeat (sexp :tag "gnus-browse-url-in-article-handler instance"))
   :group 'gnus-browse-url-in-article)
 
@@ -418,11 +419,12 @@ corresponding /click/ tracking URLs, pairing them for `completing-read'.")
   (list (make-instance 'gnus-browse-url-in-article-github-pr-handler)
         (make-instance 'gnus-browse-url-in-article-linkedin-jobs-handler)
         (make-instance 'gnus-browse-url-in-article-ars-technica-handler))
-  "Built-in `gnus-browse-url-in-article-handler' instances tried before user-supplied handlers.
-Covers GitHub PR notifications, LinkedIn job alerts, and Ars Technica newsletters.")
+  "Built-in handler instances tried before user-supplied handlers.
+Covers GitHub PR notifications, LinkedIn job alerts, and Ars Technica
+newsletters.")
 
 (defun gnus-browse-url-in-article-make-handler (predicate handler-fn)
-  "Create a `gnus-browse-url-in-article-function-handler' from PREDICATE and HANDLER-FN.
+  "Create a function-handler from PREDICATE and HANDLER-FN.
 PREDICATE is a zero-arg function returning non-nil if the handler applies.
 HANDLER-FN is a zero-arg function returning a (display . url) alist or nil.
 
@@ -436,8 +438,8 @@ Example:
 
 (defun gnus-browse-url-in-article-add-handler (handler)
   "Prepend HANDLER to `gnus-browse-url-in-article-handlers'.
-HANDLER must be an instance of `gnus-browse-url-in-article-handler' or a subclass.
-Use `gnus-browse-url-in-article-make-handler' to create one from a function pair."
+HANDLER must be a `gnus-browse-url-in-article-handler' instance or subclass.
+Use `gnus-browse-url-in-article-make-handler' to create one from functions."
   (cl-check-type handler gnus-browse-url-in-article-handler)
   (push handler gnus-browse-url-in-article-handlers))
 
@@ -450,7 +452,8 @@ Dispatch order:
    `gnus-browse-url-in-article-handlers'.  The first handler for which
    `gnus-browse-url-in-article-handler-matches-p' returns non-nil and
    `gnus-browse-url-in-article-handler-get-urls' returns a non-nil alist wins.
-2. Fall back to generic extraction: canonical link/meta tag, then full link scan.
+2. Fall back to generic extraction: canonical link/meta tag, then full link
+   scan.
 
 DWIM: browses directly when exactly one URL is found; uses `completing-read'
 when multiple URLs are present."
