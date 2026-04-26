@@ -70,6 +70,23 @@ Called in `gnus-summary-mode' context; may freely inspect
   "Return a (display . url) alist for the current article, or nil.
 Returning nil causes the dispatch loop to try the next HANDLER.")
 
+;;; ---------- Helper class: parse HTML beforehand ----------
+
+(defclass gnus-browse-url-in-article-html-handler (gnus-browse-url-in-article-handler)
+  ()
+  "Helper abstract base class that parses HTML before hand.")
+
+(cl-defgeneric gnus-browse-url-in-article-handler-get-html-urls (handler html-handle dom)
+  "Return a (display . url) alist for the current article, or nil.
+HTML-HANDLE is the handle of the HTML MIME part; DOM is the parsed
+document object model for that HTML MIME part. Returning nil causes the
+dispatch loop to try the next HANDLER.")
+
+(cl-defmethod gnus-browse-url-in-article-handler-get-urls ((h gnus-browse-url-in-article-html-handler))
+  (when-let* ((html-handle (gnus-browse-url-in-article--article-html-handle))
+              (dom         (gnus-browse-url-in-article--parse-html-handle html-handle)))
+    (gnus-browse-url-in-article-handler-get-html-urls h html-handle dom)))
+
 ;;; ---------- Function-based handler ----------
 
 (defclass gnus-browse-url-in-article-function-handler (gnus-browse-url-in-article-handler)
@@ -274,7 +291,7 @@ constructs the canonical PR URL directly from the message-id.")
 
 ;;; ---------- Built-in handler: LinkedIn jobs ----------
 
-(defclass gnus-browse-url-in-article-linkedin-jobs-handler (gnus-browse-url-in-article-handler)
+(defclass gnus-browse-url-in-article-linkedin-jobs-handler (gnus-browse-url-in-article-html-handler)
   ()
   "URL handler for LinkedIn job alert emails.
 Parses the HTML part to extract job title and company/location from each
@@ -284,54 +301,53 @@ job card, returning entries of the form \"Company · Location — Title\".")
   (when-let* ((from (mail-header-from (gnus-summary-article-header))))
     (string-match "linkedin\\.com" from)))
 
-(cl-defmethod gnus-browse-url-in-article-handler-get-urls ((_h gnus-browse-url-in-article-linkedin-jobs-handler))
-  (when-let* ((html-handle (gnus-browse-url-in-article--article-html-handle))
-              (dom         (gnus-browse-url-in-article--parse-html-handle html-handle)))
-    (let* ((flat-nodes nil)
-           result seen-ids)
-      ;; DFS walk: collect title links and company paragraphs in document order
-      (cl-labels ((walk (node)
-                    (when (and (listp node) (symbolp (car node)))
-                      (let ((tag (car node)))
-                        (cond
-                         ;; Job title: <a href="...jobs/view/N..." class="...font-bold...">
-                         ((and (eq tag 'a)
-                               (string-match "jobs/view/[0-9]+"
-                                             (or (dom-attr node 'href) ""))
-                               (string-match "\\bfont-bold\\b"
-                                             (or (dom-attr node 'class) "")))
-                          (push (cons 'job-title node) flat-nodes))
-                         ;; Company + location: <p class="text-system-gray-100 ...">
-                         ((and (eq tag 'p)
-                               (string-match "text-system-gray-100"
-                                             (or (dom-attr node 'class) "")))
-                          (push (cons 'company node) flat-nodes))))
-                      (mapc #'walk (cddr node)))))
-        (walk dom))
-      (setq flat-nodes (nreverse flat-nodes))
-      ;; Pair each title link with the next company paragraph that follows it
-      (let ((remaining flat-nodes))
-        (while remaining
-          (when (eq (caar remaining) 'job-title)
-            (let* ((link         (cdar remaining))
-                   (href         (dom-attr link 'href))
-                   (title        (string-trim (dom-texts link "")))
-                   (job-id       (and (string-match "jobs/view/\\([0-9]+\\)" href)
-                                      (match-string 1 href)))
-                   (company-node (cdr (cl-find 'company (cdr remaining) :key #'car)))
-                   (company      (and company-node
-                                      (string-trim (dom-texts company-node ""))))
-                   (clean-url    (and job-id
-                                      (format "https://www.linkedin.com/jobs/view/%s/"
-                                              job-id)))
-                   (display      (if (and company (not (string-empty-p company)))
-                                     (format "%s - %s" company title)
-                                   title)))
-              (when (and job-id clean-url (not (member job-id seen-ids)))
-                (push job-id seen-ids)
-                (push (cons display clean-url) result))))
-          (setq remaining (cdr remaining))))
-      (nreverse result))))
+(cl-defmethod gnus-browse-url-in-article-handler-get-html-urls ((_h gnus-browse-url-in-article-linkedin-jobs-handler)
+                                                                html-handle dom)
+  (let* ((flat-nodes nil)
+         result seen-ids)
+    ;; DFS walk: collect title links and company paragraphs in document order
+    (cl-labels ((walk (node)
+                  (when (and (listp node) (symbolp (car node)))
+                    (let ((tag (car node)))
+                      (cond
+                       ;; Job title: <a href="...jobs/view/N..." class="...font-bold...">
+                       ((and (eq tag 'a)
+                             (string-match "jobs/view/[0-9]+"
+                                           (or (dom-attr node 'href) ""))
+                             (string-match "\\bfont-bold\\b"
+                                           (or (dom-attr node 'class) "")))
+                        (push (cons 'job-title node) flat-nodes))
+                       ;; Company + location: <p class="text-system-gray-100 ...">
+                       ((and (eq tag 'p)
+                             (string-match "text-system-gray-100"
+                                           (or (dom-attr node 'class) "")))
+                        (push (cons 'company node) flat-nodes))))
+                    (mapc #'walk (cddr node)))))
+      (walk dom))
+    (setq flat-nodes (nreverse flat-nodes))
+    ;; Pair each title link with the next company paragraph that follows it
+    (let ((remaining flat-nodes))
+      (while remaining
+        (when (eq (caar remaining) 'job-title)
+          (let* ((link         (cdar remaining))
+                 (href         (dom-attr link 'href))
+                 (title        (string-trim (dom-texts link "")))
+                 (job-id       (and (string-match "jobs/view/\\([0-9]+\\)" href)
+                                    (match-string 1 href)))
+                 (company-node (cdr (cl-find 'company (cdr remaining) :key #'car)))
+                 (company      (and company-node
+                                    (string-trim (dom-texts company-node ""))))
+                 (clean-url    (and job-id
+                                    (format "https://www.linkedin.com/jobs/view/%s/"
+                                            job-id)))
+                 (display      (if (and company (not (string-empty-p company)))
+                                   (format "%s - %s" company title)
+                                 title)))
+            (when (and job-id clean-url (not (member job-id seen-ids)))
+              (push job-id seen-ids)
+              (push (cons display clean-url) result))))
+        (setq remaining (cdr remaining))))
+    (nreverse result)))
 
 
 ;;; ---------- Built-in handler: Ars Technica ----------
@@ -367,7 +383,7 @@ Searches NODE's subtree for the first <a> with a decodable /click/ href."
       (search button-node))
     nil))
 
-(defclass gnus-browse-url-in-article-ars-technica-handler (gnus-browse-url-in-article-handler)
+(defclass gnus-browse-url-in-article-ars-technica-handler (gnus-browse-url-in-article-html-handler)
   ()
   "URL handler for Ars Technica newsletter emails.
 Extracts article titles from text_block tables and decodes the
@@ -377,10 +393,9 @@ corresponding /click/ tracking URLs, pairing them for `completing-read'.")
   (when-let* ((from (mail-header-from (gnus-summary-article-header))))
     (string-match "arstechnica\\.com" from)))
 
-(cl-defmethod gnus-browse-url-in-article-handler-get-urls ((_h gnus-browse-url-in-article-ars-technica-handler))
-  (when-let* ((html-handle (gnus-browse-url-in-article--article-html-handle))
-              (dom         (gnus-browse-url-in-article--parse-html-handle html-handle))
-              (vib-link    (and dom (gnus-browse-url-in-article--find-view-in-browser-url dom))))
+(cl-defmethod gnus-browse-url-in-article-handler-get-html-urls ((_h gnus-browse-url-in-article-ars-technica-handler)
+                                                                html-handle dom)
+  (when-let ((vib-link    (and dom (gnus-browse-url-in-article--find-view-in-browser-url dom))))
     (let ((flat-nodes nil))
       ;; DFS walk: collect titles and button URLs in document order.
       ;; Only match the mobile_hide (desktop) variants to avoid collecting
