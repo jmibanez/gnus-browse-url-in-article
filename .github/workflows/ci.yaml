@@ -26,4 +26,4 @@ jobs:
 
     - uses: leotaku/elisp-check@master
       with:
-        file: main-file.el
+        file: gnus-browse-url-in-article.el
