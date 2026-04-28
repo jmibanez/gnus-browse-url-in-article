@@ -53,7 +53,7 @@
 (require 'cl-lib)
 (require 'dom)
 
-;;; ---------- Handler base class and protocol ----------
+;; ---------- Handler base class and protocol ----------
 
 (defclass gnus-browse-url-in-article-handler ()
   ()
@@ -70,7 +70,7 @@ Called in `gnus-summary-mode' context; may freely inspect
   "Return a (display . url) alist for the current article, or nil.
 Returning nil causes the dispatch loop to try the next HANDLER.")
 
-;;; ---------- Helper class: parse HTML beforehand ----------
+;; ---------- Helper class: parse HTML beforehand ----------
 
 (defclass gnus-browse-url-in-article-html-handler (gnus-browse-url-in-article-handler)
   ()
@@ -87,7 +87,7 @@ dispatch loop to try the next HANDLER.")
               (dom         (gnus-browse-url-in-article--parse-html-handle html-handle)))
     (gnus-browse-url-in-article-handler-get-html-urls h html-handle dom)))
 
-;;; ---------- Function-based handler ----------
+;; ---------- Function-based handler ----------
 
 (defclass gnus-browse-url-in-article-function-handler (gnus-browse-url-in-article-handler)
   ((predicate  :initarg :predicate
@@ -108,7 +108,7 @@ Create instances with `gnus-browse-url-in-article-make-handler'.")
   (funcall (oref h handler-fn)))
 
 
-;;; ---------- Group and customization ----------
+;; ---------- Group and customization ----------
 
 (defgroup gnus-browse-url-in-article nil
   "Smarter `browse-url' for Gnus articles."
@@ -129,7 +129,7 @@ or `register-gnus-browse-in-article-handler' to do both in one form."
   :group 'gnus-browse-url-in-article)
 
 
-;;; ---------- Internal utilities ----------
+;; ---------- Internal utilities ----------
 
 (defun gnus-browse-url-in-article--article-html-handle ()
   "Return the HTML MIME handle for the current Gnus article, or nil."
@@ -252,7 +252,7 @@ Matches the first anchor whose visible text contains a variant of
     nil))
 
 
-;;; ---------- Predicate helpers ----------
+;; ---------- Predicate helpers ----------
 
 (defun gnus-browse-url-in-article-if-from (regexp)
   "Return a predicate function matching articles whose From header matches REGEXP.
@@ -263,7 +263,7 @@ The returned function is suitable as the :predicate of a
       (string-match regexp from))))
 
 
-;;; ---------- Built-in handler: GitHub PR ----------
+;; ---------- Built-in handler: GitHub PR ----------
 
 (defclass gnus-browse-url-in-article-github-pr-handler (gnus-browse-url-in-article-handler)
   ()
@@ -289,7 +289,7 @@ constructs the canonical PR URL directly from the message-id.")
         (list (cons url url))))))
 
 
-;;; ---------- Built-in handler: LinkedIn jobs ----------
+;; ---------- Built-in handler: LinkedIn jobs ----------
 
 (defclass gnus-browse-url-in-article-linkedin-jobs-handler (gnus-browse-url-in-article-html-handler)
   ()
@@ -350,7 +350,7 @@ job card, returning entries of the form \"Company · Location — Title\".")
     (nreverse result)))
 
 
-;;; ---------- Built-in handler: Ars Technica ----------
+;; ---------- Built-in handler: Ars Technica ----------
 
 (defun gnus-browse-url-in-article--ars-decode-click-url (tracking-url)
   "Decode an Ars Technica /click/ TRACKING-URL and strip UTM parameters.
@@ -428,7 +428,7 @@ corresponding /click/ tracking URLs, pairing them for `completing-read'.")
          (list vib-link))))))
 
 
-;;; ---------- Default handler registry ----------
+;; ---------- Default handler registry ----------
 
 (defvar gnus-browse-url-in-article-default-handlers
   (list (make-instance 'gnus-browse-url-in-article-github-pr-handler)
@@ -457,6 +457,37 @@ HANDLER must be a `gnus-browse-url-in-article-handler' instance or subclass.
 Use `gnus-browse-url-in-article-make-handler' to create one from functions."
   (cl-check-type handler gnus-browse-url-in-article-handler)
   (push handler gnus-browse-url-in-article-handlers))
+
+(defmacro register-gnus-browse-in-article-handler (name predicate handler-fn)
+  "Define and register a function-handler named NAME.
+
+NAME is a symbol used to derive the internal variable
+`gnus-browse-url-in-article--NAME-handler', which holds the handler instance.
+Re-evaluating this form removes the stale instance from
+`gnus-browse-url-in-article-handlers' before registering the new one, so it
+is safe to call at development time without accumulating duplicates.
+
+PREDICATE is a zero-arg function returning non-nil when this handler should
+apply to the current article.  HANDLER-FN is a zero-arg function returning a
+\(display . url\) alist, or nil to fall through to the next handler.
+
+Example:
+  (register-gnus-browse-in-article-handler my-newsletter
+    (gnus-browse-url-in-article-if-from \"example\\.com\")
+    (lambda ()
+      ...))"
+  (let ((var-sym (intern (format "gnus-browse-url-in-article--%s-handler"
+                                 (symbol-name name)))))
+    `(progn
+       (defvar ,var-sym nil
+         ,(format "Handler instance for `%s', managed by `register-gnus-browse-in-article-handler'."
+                  name))
+       (when ,var-sym
+         (setq gnus-browse-url-in-article-handlers
+               (delq ,var-sym gnus-browse-url-in-article-handlers)))
+       (setq ,var-sym
+             (gnus-browse-url-in-article-make-handler ,predicate ,handler-fn))
+       (gnus-browse-url-in-article-add-handler ,var-sym))))
 
 ;;;###autoload
 (defun gnus-browse-url-in-article (_n)
