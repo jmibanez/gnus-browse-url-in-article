@@ -458,37 +458,6 @@ Use `gnus-browse-url-in-article-make-handler' to create one from functions."
   (cl-check-type handler gnus-browse-url-in-article-handler)
   (push handler gnus-browse-url-in-article-handlers))
 
-(defmacro register-gnus-browse-in-article-handler (name predicate handler-fn)
-  "Define and register a function-handler named NAME.
-
-NAME is a symbol used to derive the internal variable
-`gnus-browse-url-in-article--NAME-handler', which holds the handler instance.
-Re-evaluating this form removes the stale instance from
-`gnus-browse-url-in-article-handlers' before registering the new one, so it
-is safe to call at development time without accumulating duplicates.
-
-PREDICATE is a zero-arg function returning non-nil when this handler should
-apply to the current article.  HANDLER-FN is a zero-arg function returning a
-\(display . url\) alist, or nil to fall through to the next handler.
-
-Example:
-  (register-gnus-browse-in-article-handler my-newsletter
-    (gnus-browse-url-in-article-if-from \"example\\.com\")
-    (lambda ()
-      ...))"
-  (let ((var-sym (intern (format "gnus-browse-url-in-article--%s-handler"
-                                 (symbol-name name)))))
-    `(progn
-       (defvar ,var-sym nil
-         ,(format "Handler instance for `%s', managed by `register-gnus-browse-in-article-handler'."
-                  name))
-       (when ,var-sym
-         (setq gnus-browse-url-in-article-handlers
-               (delq ,var-sym gnus-browse-url-in-article-handlers)))
-       (setq ,var-sym
-             (gnus-browse-url-in-article-make-handler ,predicate ,handler-fn))
-       (gnus-browse-url-in-article-add-handler ,var-sym))))
-
 ;;;###autoload
 (defun gnus-browse-url-in-article (_n)
   "Browse the best URL in the current Gnus article.
