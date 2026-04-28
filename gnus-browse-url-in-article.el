@@ -53,6 +53,7 @@
 (require 'cl-lib)
 (require 'dom)
 
+
 ;; ---------- Handler base class and protocol ----------
 
 (defclass gnus-browse-url-in-article-handler ()
@@ -69,43 +70,6 @@ Called in `gnus-summary-mode' context; may freely inspect
 (cl-defgeneric gnus-browse-url-in-article-handler-get-urls (handler)
   "Return a (display . url) alist for the current article, or nil.
 Returning nil causes the dispatch loop to try the next HANDLER.")
-
-;; ---------- Helper class: parse HTML beforehand ----------
-
-(defclass gnus-browse-url-in-article-html-handler (gnus-browse-url-in-article-handler)
-  ()
-  "Helper abstract base class that parses HTML before hand.")
-
-(cl-defgeneric gnus-browse-url-in-article-handler-get-html-urls (handler html-handle dom)
-  "Return a (display . url) alist for the current article, or nil.
-HTML-HANDLE is the handle of the HTML MIME part; DOM is the parsed
-document object model for that HTML MIME part. Returning nil causes the
-dispatch loop to try the next HANDLER.")
-
-(cl-defmethod gnus-browse-url-in-article-handler-get-urls ((h gnus-browse-url-in-article-html-handler))
-  (when-let* ((html-handle (gnus-browse-url-in-article--article-html-handle))
-              (dom         (gnus-browse-url-in-article--parse-html-handle html-handle)))
-    (gnus-browse-url-in-article-handler-get-html-urls h html-handle dom)))
-
-;; ---------- Function-based handler ----------
-
-(defclass gnus-browse-url-in-article-function-handler (gnus-browse-url-in-article-handler)
-  ((predicate  :initarg :predicate
-               :type function
-               :documentation
-               "Zero-arg function; return non-nil if this handler applies.")
-   (handler-fn :initarg :handler-fn
-               :type function
-               :documentation
-               "Zero-arg function; return (display . url) alist or nil."))
-  "A URL handler backed by a predicate and handler function pair.
-Create instances with `gnus-browse-url-in-article-make-handler'.")
-
-(cl-defmethod gnus-browse-url-in-article-handler-matches-p ((h gnus-browse-url-in-article-function-handler))
-  (funcall (oref h predicate)))
-
-(cl-defmethod gnus-browse-url-in-article-handler-get-urls ((h gnus-browse-url-in-article-function-handler))
-  (funcall (oref h handler-fn)))
 
 
 ;; ---------- Group and customization ----------
@@ -263,6 +227,44 @@ The returned function is suitable as the :predicate of a
       (string-match regexp from))))
 
 
+;; ---------- Helper class: parse HTML beforehand ----------
+
+(defclass gnus-browse-url-in-article-html-handler (gnus-browse-url-in-article-handler)
+  ()
+  "Helper abstract base class that parses HTML before hand.")
+
+(cl-defgeneric gnus-browse-url-in-article-handler-get-html-urls (handler html-handle dom)
+  "Return a (display . url) alist for the current article, or nil.
+HTML-HANDLE is the handle of the HTML MIME part; DOM is the parsed
+document object model for that HTML MIME part. Returning nil causes the
+dispatch loop to try the next HANDLER.")
+
+(cl-defmethod gnus-browse-url-in-article-handler-get-urls ((h gnus-browse-url-in-article-html-handler))
+  (when-let* ((html-handle (gnus-browse-url-in-article--article-html-handle))
+              (dom         (gnus-browse-url-in-article--parse-html-handle html-handle)))
+    (gnus-browse-url-in-article-handler-get-html-urls h html-handle dom)))
+
+;; ---------- Function-based handler ----------
+
+(defclass gnus-browse-url-in-article-function-handler (gnus-browse-url-in-article-handler)
+  ((predicate  :initarg :predicate
+               :type function
+               :documentation
+               "Zero-arg function; return non-nil if this handler applies.")
+   (handler-fn :initarg :handler-fn
+               :type function
+               :documentation
+               "Zero-arg function; return (display . url) alist or nil."))
+  "A URL handler backed by a predicate and handler function pair.
+Create instances with `gnus-browse-url-in-article-make-handler'.")
+
+(cl-defmethod gnus-browse-url-in-article-handler-matches-p ((h gnus-browse-url-in-article-function-handler))
+  (funcall (oref h predicate)))
+
+(cl-defmethod gnus-browse-url-in-article-handler-get-urls ((h gnus-browse-url-in-article-function-handler))
+  (funcall (oref h handler-fn)))
+
+
 ;; ---------- Built-in handler: GitHub PR ----------
 
 (defclass gnus-browse-url-in-article-github-pr-handler (gnus-browse-url-in-article-handler)
@@ -302,7 +304,7 @@ job card, returning entries of the form \"Company · Location — Title\".")
     (string-match "linkedin\\.com" from)))
 
 (cl-defmethod gnus-browse-url-in-article-handler-get-html-urls ((_h gnus-browse-url-in-article-linkedin-jobs-handler)
-                                                                html-handle dom)
+                                                                _html-handle dom)
   (let* ((flat-nodes nil)
          result seen-ids)
     ;; DFS walk: collect title links and company paragraphs in document order
@@ -394,7 +396,7 @@ corresponding /click/ tracking URLs, pairing them for `completing-read'.")
     (string-match "arstechnica\\.com" from)))
 
 (cl-defmethod gnus-browse-url-in-article-handler-get-html-urls ((_h gnus-browse-url-in-article-ars-technica-handler)
-                                                                html-handle dom)
+                                                                _html-handle dom)
   (when-let ((vib-link    (and dom (gnus-browse-url-in-article--find-view-in-browser-url dom))))
     (let ((flat-nodes nil))
       ;; DFS walk: collect titles and button URLs in document order.
