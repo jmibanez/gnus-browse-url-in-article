@@ -5,7 +5,7 @@
 ;; Author: JM Ibañez <jm@jmibanez.com>
 ;; URL: https://github.com/jmibanez/gnus-browse-url-in-article
 ;; Version: 1.0.0
-;; Package-Requires: ((emacs "26.1") (gnus "1.0"))
+;; Package-Requires: ((emacs "26.1"))
 ;; Keywords: convenience, mail, gnus
 
 ;; This file is free software; you can redistribute it and/or modify
