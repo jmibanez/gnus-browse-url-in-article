@@ -5,7 +5,7 @@
 ;; Author: JM Ibañez <jm@jmibanez.com>
 ;; URL: https://github.com/jmibanez/gnus-browse-url-in-article
 ;; Version: 1.0.0
-;; Package-Requires: ((emacs "26.1"))
+;; Package-Requires: ((emacs "27.1"))
 ;; Keywords: convenience, mail, gnus
 
 ;; This file is free software; you can redistribute it and/or modify
@@ -474,7 +474,9 @@ Dispatch order:
 
 DWIM: browses directly when exactly one URL is found; uses `completing-read'
 when multiple URLs are present."
-  (interactive "p" gnus-summary-mode)
+  (interactive "p")
+  (unless (derived-mode-p 'gnus-summary-mode)
+    (user-error "Not in a Gnus summary buffer"))
   (gnus-summary-select-article)
   (gnus-configure-windows 'article)
   (let* ((all-handlers (append gnus-browse-url-in-article-default-handlers
