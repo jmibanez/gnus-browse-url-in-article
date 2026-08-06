@@ -95,6 +95,15 @@ or `register-gnus-browse-in-article-handler' to do both in one form."
 
 ;; ---------- Internal utilities ----------
 
+(defun gnus-browse-url-in-article--dom-text (node)
+  "Return all textual data under NODE as a single string.
+Wraps `dom-inner-text' on Emacs 31+ and falls back to `dom-texts'
+on earlier versions, where `dom-inner-text' does not yet exist."
+  (if (fboundp 'dom-inner-text)
+      (dom-inner-text node)
+    (with-suppressed-warnings ((obsolete dom-texts))
+      (dom-texts node ""))))
+
 (defun gnus-browse-url-in-article--article-html-handle ()
   "Return the HTML MIME handle for the current Gnus article, or nil."
   (let ((handles (with-current-buffer gnus-article-buffer
@@ -204,7 +213,7 @@ Matches the first anchor whose visible text contains a variant of
                   (when (and (listp node) (symbolp (car node)))
                     (when (eq (car node) 'a)
                       (let ((href (dom-attr node 'href))
-                            (text (string-trim (dom-texts node ""))))
+                            (text (string-trim (gnus-browse-url-in-article--dom-text node))))
                         (when (and href
                                    (not (string-empty-p text))
                                    (string-match-p
@@ -333,12 +342,12 @@ job card, returning entries of the form \"Company · Location — Title\".")
         (when (eq (caar remaining) 'job-title)
           (let* ((link         (cdar remaining))
                  (href         (dom-attr link 'href))
-                 (title        (string-trim (dom-texts link "")))
+                 (title        (string-trim (gnus-browse-url-in-article--dom-text link)))
                  (job-id       (and (string-match "jobs/view/\\([0-9]+\\)" href)
                                     (match-string 1 href)))
                  (company-node (cdr (cl-find 'company (cdr remaining) :key #'car)))
                  (company      (and company-node
-                                    (string-trim (dom-texts company-node ""))))
+                                    (string-trim (gnus-browse-url-in-article--dom-text company-node))))
                  (clean-url    (and job-id
                                     (format "https://www.linkedin.com/jobs/view/%s/"
                                             job-id)))
@@ -408,7 +417,7 @@ corresponding /click/ tracking URLs, pairing them for `completing-read'.")
                         (cond
                          ;; Article title block (desktop version)
                          ((string= cls "text_block block-1 mobile_hide")
-                          (let ((title (string-trim (dom-texts node ""))))
+                          (let ((title (string-trim (gnus-browse-url-in-article--dom-text node))))
                             (unless (string-empty-p title)
                               (push (cons 'title title) flat-nodes))))
                          ;; Read Full Story button (desktop version)
@@ -459,7 +468,7 @@ a (\"Title - Author\" . url) alist for `completing-read'.")
                              href
                              (string-match-p "medium\\.com/@" href)
                              (not (string-empty-p
-                                   (string-trim (dom-texts node "")))))
+                                   (string-trim (gnus-browse-url-in-article--dom-text node)))))
                         (push (cons 'author node) flat-nodes))
                        (t
                         (mapc #'walk (cddr node))))))))
@@ -473,9 +482,9 @@ a (\"Title - Author\" . url) alist for `completing-read'.")
                  (href    (dom-attr link 'href))
                  (url     (replace-regexp-in-string "\\?.*" "" href))
                  (h2      (dom-child-by-tag link 'h2))
-                 (title   (string-trim (dom-texts h2 "")))
+                 (title   (string-trim (gnus-browse-url-in-article--dom-text h2)))
                  (author  (and last-author
-                               (string-trim (dom-texts last-author ""))))
+                               (string-trim (gnus-browse-url-in-article--dom-text last-author))))
                  (display (if (and author (not (string-empty-p author)))
                               (format "%s - %s" title author)
                             title)))
