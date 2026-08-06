@@ -406,7 +406,7 @@ corresponding /click/ tracking URLs, pairing them for `completing-read'.")
 
 (cl-defmethod gnus-browse-url-in-article-handler-get-html-urls ((_h gnus-browse-url-in-article-ars-technica-handler)
                                                                 _html-handle dom)
-  (when-let ((vib-link    (and dom (gnus-browse-url-in-article--find-view-in-browser-url dom))))
+  (when-let* ((vib-link    (and dom (gnus-browse-url-in-article--find-view-in-browser-url dom))))
     (let ((flat-nodes nil))
       ;; DFS walk: collect titles and button URLs in document order.
       ;; Only match the mobile_hide (desktop) variants to avoid collecting
